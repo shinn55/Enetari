@@ -1,0 +1,21 @@
+[Unit]
+Description=Enetari local Qwen server
+After=local-fs.target
+Wants=local-fs.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/enetari/llama.cpp
+ExecStart=/opt/enetari/llama.cpp/build/bin/llama-server \
+  --model /opt/enetari/models/llm/Qwen3-4B-Q4_K_M.gguf \
+  --host 127.0.0.1 \
+  --port 8080 \
+  --ctx-size 4096 \
+  --gpu-layers 99 \
+  --parallel 1
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=180
+
+[Install]
+WantedBy=multi-user.target
