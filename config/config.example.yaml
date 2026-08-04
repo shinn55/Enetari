@@ -1,0 +1,21 @@
+stt:
+  engine: whisper_cpp
+  model: small
+  language: fr
+
+tts:
+  engine: piper
+  voice: fr_FR-siwis-medium
+
+llm:
+  engine: llama_server
+  api_url: http://127.0.0.1:8080
+  model_name: Qwen3-4B
+  context_size: 4096
+  max_tokens: 220
+  temperature: 0.6
+  top_p: 0.9
+
+memory:
+  engine: sqlite
+  owner_name: proprietaire
