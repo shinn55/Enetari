@@ -251,12 +251,21 @@ def speak(config: dict[str, Any], text: str) -> Path:
     tts = config["tts"]
     output = Path(config["paths"]["audio_output"]) / "reponse.wav"
     output.parent.mkdir(parents=True, exist_ok=True)
+
+    step_start = perf_counter()
     run([str(tts["executable"]), "--model", str(tts["model"]),
          "--config", str(tts["model_config"]), "--output_file", str(output)],
         input_text=text)
+    print(f"[TIME] piper : {perf_counter() - step_start:.3f}s")
+
+    step_start = perf_counter()
     device = resolve_playback_device(config)
+    print(f"[TIME] detection_audio : {perf_counter() - step_start:.3f}s")
     print(f"[AUDIO] Sortie utilisée : {device}")
+
+    step_start = perf_counter()
     run(["aplay", "-q", "-D", device, str(output)])
+    print(f"[TIME] aplay : {perf_counter() - step_start:.3f}s")
     return output
 
 
