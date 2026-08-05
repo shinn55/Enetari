@@ -193,29 +193,52 @@ def generate_reply(config: dict[str, Any], system_prompt: str,
 
 
 def detect_playback_device() -> str:
-    """Choisit automatiquement USB, puis analogique, puis le premier périphérique."""
+    """Choisit la meilleure sortie ALSA disponible selon un score simple."""
     try:
-        result = subprocess.run(["aplay", "-l"], text=True, capture_output=True,
-                                check=True, timeout=10)
+        result = subprocess.run(
+            ["aplay", "-l"],
+            text=True,
+            capture_output=True,
+            check=True,
+            timeout=10,
+        )
     except (FileNotFoundError, subprocess.SubprocessError):
         return "default"
 
-    devices: list[tuple[int, int, str]] = []
     pattern = re.compile(r"card (\d+): .*device (\d+):", re.IGNORECASE)
+    candidates: list[tuple[int, int, int, str]] = []
+
     for line in result.stdout.splitlines():
         match = pattern.search(line)
-        if match:
-            devices.append((int(match.group(1)), int(match.group(2)), line.casefold()))
+        if not match:
+            continue
 
-    for card, device, description in devices:
-        if "usb" in description or "headset" in description or "casque" in description:
-            return f"plughw:{card},{device}"
-    for card, device, description in devices:
-        if "analog" in description or "alc" in description or "headphone" in description:
-            return f"plughw:{card},{device}"
-    if devices:
-        return f"plughw:{devices[0][0]},{devices[0][1]}"
-    return "default"
+        card = int(match.group(1))
+        device = int(match.group(2))
+        description = line.casefold()
+
+        if "hdmi" in description:
+            score = 0
+        elif any(keyword in description for keyword in (
+            "headset", "headphone", "gaming", "casque", "g432",
+        )):
+            score = 100
+        elif "usb" in description:
+            score = 80
+        elif "analog" in description or "alc" in description:
+            score = 60
+        else:
+            score = 10
+
+        candidates.append((score, card, device, line.strip()))
+
+    if not candidates:
+        return "default"
+
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    score, card, device, description = candidates[0]
+    print(f"[AUDIO] Détecté : {description} (score={score})")
+    return f"plughw:{card},{device}"
 
 
 def resolve_playback_device(config: dict[str, Any]) -> str:
