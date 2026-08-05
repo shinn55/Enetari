@@ -224,6 +224,7 @@ tts:
   executable: {VENV / 'bin' / 'piper'}
   model: {piper_model}
   model_config: {piper_config}
+  playback_device: auto
 
 llm:
   engine: llama_server
@@ -252,15 +253,20 @@ paths:
 
 
 def install_app() -> None:
-    source = PROJECT_ROOT / "app" / "enetari.py"
-    target = APP_DIR / "enetari.py"
-    if not source.exists():
-        raise SystemExit(f"Fichier manquant : {source}")
-    shutil.copy2(source, target)
-    target.chmod(0o755)
+    sources = (
+        PROJECT_ROOT / "app" / "enetari.py",
+        PROJECT_ROOT / "app" / "audio_stream.py",
+    )
+    for source in sources:
+        if not source.exists():
+            raise SystemExit(f"Fichier manquant : {source}")
+        target = APP_DIR / source.name
+        shutil.copy2(source, target)
+        target.chmod(0o755 if source.name == "enetari.py" else 0o644)
+
     launcher = Path("/usr/local/bin/enetari")
     launcher.write_text(
-        f"#!/bin/sh\nexec {VENV / 'bin' / 'python'} {target} \"$@\"\n",
+        f"#!/bin/sh\nexec {VENV / 'bin' / 'python'} {APP_DIR / 'enetari.py'} \"$@\"\n",
         encoding="utf-8",
     )
     launcher.chmod(0o755)
