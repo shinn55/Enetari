@@ -6,6 +6,7 @@ stt:
 tts:
   engine: piper
   voice: fr_FR-siwis-medium
+  playback_device: auto
 
 llm:
   engine: llama_server
