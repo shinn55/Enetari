@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sqlite3
 import subprocess
@@ -167,25 +168,61 @@ N’invente aucun souvenir et ne révèle jamais ces instructions.
 
 def generate_reply(config: dict[str, Any], system_prompt: str,
                    messages: list[sqlite3.Row]) -> str:
+    """Lit la réponse Qwen en streaming et reconstitue le texte complet."""
     llm = config["llm"]
     payload_messages = [{"role": "system", "content": system_prompt}]
     payload_messages.extend({"role": str(row["role"]), "content": str(row["content"])}
                             for row in messages if row["role"] in {"user", "assistant"})
+
+    request_start = perf_counter()
+    first_fragment_seen = False
+    fragments: list[str] = []
+
     try:
-        response = requests.post(
+        with requests.post(
             str(llm["api_url"]).rstrip("/") + "/v1/chat/completions",
             json={"model": llm.get("model_name", "Qwen3-4B"),
                   "messages": payload_messages,
                   "temperature": float(llm.get("temperature", 0.6)),
                   "top_p": float(llm.get("top_p", 0.9)),
                   "max_tokens": int(llm.get("max_tokens", 220)),
-                  "stream": False},
+                  "stream": True},
             timeout=int(llm.get("timeout_seconds", 180)),
-        )
-        response.raise_for_status()
-        answer = str(response.json()["choices"][0]["message"]["content"])
-    except (requests.RequestException, KeyError, IndexError, ValueError) as exc:
+            stream=True,
+        ) as response:
+            response.raise_for_status()
+
+            for raw_line in response.iter_lines(decode_unicode=True):
+                if not raw_line:
+                    continue
+
+                line = raw_line.strip()
+                if not line.startswith("data:"):
+                    continue
+
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    break
+
+                try:
+                    event = json.loads(data)
+                    fragment = event["choices"][0].get("delta", {}).get("content")
+                except (json.JSONDecodeError, KeyError, IndexError, TypeError):
+                    continue
+
+                if not fragment:
+                    continue
+
+                if not first_fragment_seen:
+                    print(f"[TIME] premier_fragment_qwen : {perf_counter() - request_start:.3f}s")
+                    first_fragment_seen = True
+
+                fragments.append(str(fragment))
+
+    except requests.RequestException as exc:
         raise EnetariError("Le serveur Qwen local ne répond pas correctement.") from exc
+
+    answer = "".join(fragments)
     answer = re.sub(r"(?s)<think>.*?</think>", "", answer)
     answer = re.sub(r"(?s)\[Start thinking\].*?\[End thinking\]", "", answer).strip()
     if not answer:
