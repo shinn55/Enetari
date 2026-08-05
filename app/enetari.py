@@ -264,8 +264,24 @@ def speak(config: dict[str, Any], text: str) -> Path:
     print(f"[AUDIO] Sortie utilisée : {device}")
 
     step_start = perf_counter()
-    run(["aplay", "-q", "-D", device, str(output)])
-    print(f"[TIME] aplay : {perf_counter() - step_start:.3f}s")
+    try:
+        process = subprocess.Popen(
+            ["aplay", "-q", "-D", device, str(output)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+    except FileNotFoundError as exc:
+        raise EnetariError("Programme introuvable : aplay") from exc
+
+    print(f"[TIME] lancement_aplay : {perf_counter() - step_start:.3f}s")
+    return_code = process.wait()
+    print(f"[TIME] lecture_complete : {perf_counter() - step_start:.3f}s")
+
+    if return_code != 0:
+        detail = (process.stderr.read() if process.stderr else "").strip()
+        raise EnetariError(detail or "Échec de aplay")
+
     return output
 
 
