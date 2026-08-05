@@ -12,6 +12,7 @@ import tarfile
 import tempfile
 from datetime import datetime
 from pathlib import Path
+from time import perf_counter
 from typing import Any
 
 import requests
@@ -274,16 +275,38 @@ def create_backup(config: dict[str, Any]) -> Path:
 
 def answer_once(config: dict[str, Any], personality: dict[str, Any], memory: Memory,
                 user: str, text: str, use_voice: bool) -> str:
+    total_start = perf_counter()
+
+    step_start = perf_counter()
     memory.add_message("user", text)
+    print(f"[TIME] sauvegarde_question : {perf_counter() - step_start:.3f}s")
+
+    step_start = perf_counter()
     extracted = detect_memory(text)
     if extracted:
         memory.remember(*extracted)
-    answer = generate_reply(config,
-                            build_system_prompt(personality, memory.memories(), user, memory.role),
-                            memory.recent_messages())
+    print(f"[TIME] analyse_memoire : {perf_counter() - step_start:.3f}s")
+
+    step_start = perf_counter()
+    memories = memory.memories()
+    messages = memory.recent_messages()
+    system_prompt = build_system_prompt(personality, memories, user, memory.role)
+    print(f"[TIME] preparation_prompt : {perf_counter() - step_start:.3f}s")
+
+    step_start = perf_counter()
+    answer = generate_reply(config, system_prompt, messages)
+    print(f"[TIME] generation_qwen : {perf_counter() - step_start:.3f}s")
+
+    step_start = perf_counter()
     memory.add_message("assistant", answer)
+    print(f"[TIME] sauvegarde_reponse : {perf_counter() - step_start:.3f}s")
+
     if use_voice:
+        step_start = perf_counter()
         speak(config, answer)
+        print(f"[TIME] synthese_et_lecture : {perf_counter() - step_start:.3f}s")
+
+    print(f"[TIME] total : {perf_counter() - total_start:.3f}s")
     return answer
 
 
